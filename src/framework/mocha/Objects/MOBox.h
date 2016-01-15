@@ -13,6 +13,7 @@
 @class Mocha;
 @class MOBoxManager;
 
+#define DEBUG_CRASHES 0
 
 /*!
  * @class MOBox
@@ -20,8 +21,7 @@
  */
 @interface MOBox : NSObject
 
-- (id)initWithManager:(MOBoxManager*)manager;
-- (void)associateObject:(id)object jsObject:(JSObjectRef)jsObject;
+- (id)initWithManager:(MOBoxManager *)manager object:(id)object jsObject:(JSObjectRef)jsObject;
 - (void)disassociateObject;
 
 /*!
@@ -31,9 +31,6 @@
  * @result An object
  */
 @property (strong, readonly) id representedObject;
-
-@property (weak) id representedObjectCanary;
-@property (strong) NSString *representedObjectCanaryDesc;
 
 /*!
  * @property JSObject
@@ -50,5 +47,9 @@
  * @result A MOBoxManager object
  */
 @property (weak, readonly) MOBoxManager *manager;
+
+#if DEBUG_CRASHES
+@property (strong) NSString *representedObjectCanaryDesc;
+#endif
 
 @end

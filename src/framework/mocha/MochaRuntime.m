@@ -11,6 +11,7 @@
 
 #import "MOBox.h"
 #import "MOBoxManager.h"
+#import "MOBoxManagerBoxContext.h"
 #import "MOUndefined.h"
 #import "MOMethod_Private.h"
 #import "MOClosure_Private.h"
@@ -1131,12 +1132,16 @@ JSValueRef Mocha_getProperty(JSContextRef ctx, JSObjectRef object, JSStringRef p
 #pragma mark Mocha Objects
 
 static void MOObject_initialize(JSContextRef ctx, JSObjectRef jsObjectRepresentingBox) {
-    NSCAssert([((__bridge MOBox *)JSObjectGetPrivate(jsObjectRepresentingBox)) isKindOfClass:[MOBox class]], @"should have an associated box object");
+    MOBoxManagerBoxContext* context = (__bridge MOBoxManagerBoxContext *)(JSObjectGetPrivate(jsObjectRepresentingBox));
+    NSCAssert([context isKindOfClass:[MOBoxManagerBoxContext class]], @"should have a context object");
+
+    [context finishMakingBoxForObject:jsObjectRepresentingBox];
 }
 
 static void MOObject_finalize(JSObjectRef jsObjectRepresentingBox) {
     // Give the object a chance to finalize itself
-    MOBox *box = (__bridge MOBox *)(JSObjectGetPrivate(jsObjectRepresentingBox));
+    void* private = JSObjectGetPrivate(jsObjectRepresentingBox);
+    MOBox *box = (__bridge MOBox *)private;
     NSCAssert(!box || [box isKindOfClass:[MOBox class]], @"if we're shutting down, the private object may have been cleaned out already, but otherwise, it should be an MOBox");
 
     id boxedObject = [box representedObject];
@@ -1640,6 +1645,8 @@ static JSValueRef MOFunction_callAsFunction(JSContextRef ctx, JSObjectRef functi
         value = MOFunctionInvoke(function, ctx, argumentCount, arguments, exception);
     }
     @catch (NSException *e) {
+        debug(@"caught exception whilst invoking function %@: %@", function, e);
+
         // Catch ObjC exceptions and propogate them up as JS exceptions
         if (exception != nil) {
             *exception = [runtime JSValueForObject:e];

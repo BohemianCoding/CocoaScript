@@ -20,11 +20,9 @@
  * @method objectWithJSObject:context:
  * @abstract Creates a new JavaScript wrapper object
  * 
- * @param jsObject
- * @abstract The JavaScript object reference
+ * @param jsObject The JavaScript object reference
  * 
- * @param context
- * The JavaScript context reference
+ * @param ctx The JavaScript context reference
  * 
  * @result An MOJavaScriptObject object
  */

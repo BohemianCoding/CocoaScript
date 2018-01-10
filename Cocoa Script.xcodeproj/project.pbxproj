@@ -202,7 +202,7 @@
 		CC66D8A5181A2B0A0039A0A5 /* MOInstanceVariableDescription_Private.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D881181A2B0A0039A0A5 /* MOInstanceVariableDescription_Private.h */; };
 		CC66D8A6181A2B0A0039A0A5 /* MOInstanceVariableDescription.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D882181A2B0A0039A0A5 /* MOInstanceVariableDescription.h */; };
 		CC66D8A7181A2B0A0039A0A5 /* MOInstanceVariableDescription.m in Sources */ = {isa = PBXBuildFile; fileRef = CC66D883181A2B0A0039A0A5 /* MOInstanceVariableDescription.m */; };
-		CC66D8A8181A2B0A0039A0A5 /* MOJavaScriptObject.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D884181A2B0A0039A0A5 /* MOJavaScriptObject.h */; };
+		CC66D8A8181A2B0A0039A0A5 /* MOJavaScriptObject.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D884181A2B0A0039A0A5 /* MOJavaScriptObject.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CC66D8A9181A2B0A0039A0A5 /* MOJavaScriptObject.m in Sources */ = {isa = PBXBuildFile; fileRef = CC66D885181A2B0A0039A0A5 /* MOJavaScriptObject.m */; };
 		CC66D8AA181A2B0A0039A0A5 /* MOMethod_Private.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D886181A2B0A0039A0A5 /* MOMethod_Private.h */; };
 		CC66D8AB181A2B0A0039A0A5 /* MOMethod.h in Headers */ = {isa = PBXBuildFile; fileRef = CC66D887181A2B0A0039A0A5 /* MOMethod.h */; };
@@ -1216,6 +1216,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CC66D81E181A2A710039A0A5 /* COScript.h in Headers */,
+				CC66D8A8181A2B0A0039A0A5 /* MOJavaScriptObject.h in Headers */,
 				CC66D89C181A2B0A0039A0A5 /* MOAllocator.h in Headers */,
 				CC66D80E181A2A470039A0A5 /* TDWhitespaceState.h in Headers */,
 				CC66D812181A2A470039A0A5 /* TDWordOrReservedState.h in Headers */,
@@ -1230,7 +1231,6 @@
 				CC66D7EA181A2A470039A0A5 /* TDScientificNumberState.h in Headers */,
 				CC66D8AA181A2B0A0039A0A5 /* MOMethod_Private.h in Headers */,
 				CC66D7F4181A2A470039A0A5 /* TDSymbol.h in Headers */,
-				CC66D8A8181A2B0A0039A0A5 /* MOJavaScriptObject.h in Headers */,
 				CC66D8A6181A2B0A0039A0A5 /* MOInstanceVariableDescription.h in Headers */,
 				CC66D84C181A2AB10039A0A5 /* MOBridgeSupportParser.h in Headers */,
 				CC66D848181A2AB10039A0A5 /* MOBridgeSupportController.h in Headers */,

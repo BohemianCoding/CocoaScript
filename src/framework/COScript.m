@@ -82,6 +82,23 @@ void COScriptDebug(NSString* format, ...) {
     if ((self != nil)) {
         _mochaRuntime = [[Mocha alloc] initWithName:name ? name : @"Untitled"];
         
+        __weak COScript *weakSelf = self;
+        _mochaRuntime.expectionHandler = ^(JSContext* context, NSException *exception) {
+            NSLog(@"Exception: %@", exception);
+            if (weakSelf.errorController) {
+                if ([exception objectForKeyedSubscript:@"line"]) {
+                    [weakSelf.errorController
+                     source:weakSelf.processedSource
+                     hadError:[[exception objectForKeyedSubscript:@"reason"] toString]
+                     onLineNumber:[[[exception objectForKeyedSubscript:@"line"] toNumber] integerValue]
+                     atSourceURL:[weakSelf.env objectForKey:@"scriptURL"]
+                     ];
+                    return;
+                }
+            }
+            [weakSelf printException:exception];
+        };
+        
         self.coreModuleMap = coreModules;
         if (!coreModuleScriptCache) {
             coreModuleScriptCache = [NSMutableDictionary dictionary];
@@ -103,17 +120,20 @@ void COScriptDebug(NSString* format, ...) {
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
-    [self cleanupFibers];
-    
 }
 
 - (void)cleanup {
+    // clean up fibers to shut everything down nicely
+    [self cleanupFibers];
+    
+    // clean up the global object that we injected in the runtime
     [self deleteObjectWithName:@"jstalk"];
     [self deleteObjectWithName:@"coscript"];
     [self deleteObjectWithName:@"print"];
     [self deleteObjectWithName:@"log"];
     [self deleteObjectWithName:@"require"];
     
+    // clean up mocha
     [_mochaRuntime shutdown];
     _mochaRuntime = nil;
 }
@@ -450,30 +470,10 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
 
     [self pushAsCurrentCOScript];
     
-    id resultObj = nil;
-    
-    @try {
+    id resultObj = [_mochaRuntime evalString:str atURL:base];
 
-        resultObj = [_mochaRuntime evalString:str atURL:base];
-
-        if (resultObj == [MOUndefined undefined]) {
-            resultObj = nil;
-        }
-    }
-    @catch (NSException *e) {
-        
-        NSDictionary *d = [e userInfo];
-        if ([d objectForKey:@"line"]) {
-            if ([_errorController respondsToSelector:@selector(coscript:hadError:onLineNumber:atSourceURL:)]) {
-                [_errorController coscript:self hadError:[e reason] onLineNumber:[[d objectForKey:@"line"] integerValue] atSourceURL:base];
-            }
-        }
-        
-        NSLog(@"Exception: %@", [e userInfo]);
-        [self printException:e];
-    }
-    @finally {
-        //
+    if (resultObj == [MOUndefined undefined]) {
+        resultObj = nil;
     }
     
     [self popAsCurrentCOScript];
@@ -493,22 +493,13 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
 }
 
 - (id)callFunctionNamed:(NSString*)name withArguments:(NSArray*)args {
-    
-    id returnValue = nil;
-    
-    @try {
         
-        [self pushAsCurrentCOScript];
-        
-        returnValue = [_mochaRuntime callFunctionWithName:name withArgumentsInArray:args];
-        
-        if (returnValue == [MOUndefined undefined]) {
-            returnValue = nil;
-        }
-    }
-    @catch (NSException * e) {
-        NSLog(@"Exception: %@", e);
-        [self printException:e];
+    [self pushAsCurrentCOScript];
+
+    id returnValue = [_mochaRuntime callFunctionWithName:name withArgumentsInArray:args];
+
+    if (returnValue == [MOUndefined undefined]) {
+        returnValue = nil;
     }
     
     [self popAsCurrentCOScript];
@@ -522,15 +513,7 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
     
     //[self garbageCollect];
     
-    JSValueRef r = nil;
-    @try {
-        r = [_mochaRuntime callJSFunction:jsFunction withArgumentsInArray:arguments];
-    }
-    @catch (NSException * e) {
-        NSLog(@"Exception: %@", e);
-        NSLog(@"Info: %@", [e userInfo]);
-        [self printException:e];
-    }
+    JSValueRef r = [_mochaRuntime callJSFunction:jsFunction withArgumentsInArray:arguments];
     
     [self popAsCurrentCOScript];
     
@@ -614,7 +597,6 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
 }
 
 - (void)printException:(NSException*)e {
-    
     NSMutableString *s = [NSMutableString string];
     
     [s appendFormat:@"%@\n", e];
@@ -628,9 +610,9 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
     [self print:s];
 }
 
-- (void)print:(NSString*)s {
+- (void)print:(id)s {
     
-    if (_printController && [_printController respondsToSelector:@selector(print:)]) {
+    if (_printController) {
         [_printController print:s];
     }
     else {
@@ -715,7 +697,6 @@ NSString *currentCOScriptThreadIdentifier = @"org.jstalk.currentCOScriptHack";
 + (id)proxyForApp:(NSString*)app {
     return [self application:app];
 }
-
 
 @end
 

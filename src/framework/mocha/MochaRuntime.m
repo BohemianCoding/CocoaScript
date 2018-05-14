@@ -12,6 +12,7 @@
 #import "MOBox.h"
 #import "MOBoxManager.h"
 #import "MOBoxManagerBoxContext.h"
+#import "MOClassDescription.h"
 #import "MOUndefined.h"
 #import "MOMethod_Private.h"
 #import "MOClosure_Private.h"
@@ -79,6 +80,7 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
     NSMutableDictionary *_exportedObjects;
     MOBoxManager *_boxManager;
     NSMutableArray *_frameworkSearchPaths;
+    NSMutableArray *_registeredClasses;
 }
 
 @synthesize delegate=_delegate;
@@ -197,6 +199,7 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
             JSGlobalContextSetName(ctx, jsName);
             JSStringRelease(jsName);
         }
+        
         _ownsContext = YES;
     }
     else {
@@ -219,6 +222,7 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
                                  @"/System/Library/Frameworks",
                                  @"/Library/Frameworks",
                                  nil];
+        _registeredClasses = [[NSMutableArray alloc] init];
 
         // Add the runtime as a property of the context
         [self setObject:self withName:@"__mocha__" attributes:(kJSPropertyAttributeReadOnly|kJSPropertyAttributeDontEnum|kJSPropertyAttributeDontDelete)];
@@ -408,6 +412,7 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
         }
 
         NSString *key = (NSString *)CFBridgingRelease(JSStringCopyCFString(kCFAllocatorDefault, name));
+        JSStringRelease(name);
         if (jsValue == hashValue) {
 
             // if we spot a recursive link here, we have a decision to make about whether to:
@@ -930,6 +935,8 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
 
     JSGlobalContextRelease(_ctx);
     _ctx = nil;
+    
+    [self deregisterNativeClasses];
 }
 
 - (void)print:(id)o {
@@ -976,6 +983,110 @@ NSString * const MOAlreadyProtectedKey = @"moAlreadyProtectedKey";
     [symbols addObjectsFromArray:[bridgeSupportSymbols allKeys]];
 
     return symbols;
+}
+
+- (NSString*)scopedClassName:(NSString*)className {
+    return [NSString stringWithFormat:@"MORegisteredClass_%@_%@", self, className];
+}
+
+- (id)registerNativeClass:(NSDictionary* )classDescription {
+    if (![classDescription isKindOfClass:[NSDictionary class]]) {
+        @throw [NSException exceptionWithName:@"Bad argument" reason:[NSString stringWithFormat:@"classDescription must be an object, received %@", [classDescription class]] userInfo:@{}];
+    }
+    
+    NSString* className = [self scopedClassName: [classDescription valueForKey:@"className"]];
+    
+    Class nativeClass = objc_lookUpClass([className UTF8String]);
+    
+    if (!nativeClass) {
+        Class superClass = [classDescription valueForKey:@"superClass"] ?: NSClassFromString(@"NSObject");
+        
+        NSDictionary *typeEncodings = [classDescription valueForKey:@"_typeEncodings"] ?: @{};
+        
+        MOClassDescription* moClassDescription = [MOClassDescription
+                                                 allocateDescriptionForClassWithName:className
+                                                 superclass:superClass];
+        
+        [classDescription enumerateKeysAndObjectsUsingBlock:^(id key, id object, BOOL *stop) {
+            // avoid reserved keys
+            if ([key isEqualToString:@"superClass"] || [key isEqualToString:@"className"] || [key isEqualToString:@"init"] || [key isEqualToString:@"_typeEncodings"] || [key isEqualToString:@"__mocha"]) {
+                return;
+            }
+            
+            // check if it's a function
+            if ([object isKindOfClass:[MOJavaScriptObject class]]) {
+                NSDictionary* typeEncoding = [typeEncodings valueForKey:key];
+                
+                if (!typeEncoding) {
+                    NSUInteger numberOfArgs = MOGetFunctionLength(object);
+                    NSMutableArray * argsTypes = [NSMutableArray arrayWithCapacity:numberOfArgs];
+                    for (int i = 0; i < numberOfArgs; i++) {
+                        [argsTypes addObject:@"@"];
+                    }
+                    typeEncoding = @{
+                      @"returnType": @"@",
+                      @"argumentTypes": argsTypes
+                    };
+                }
+                
+                NSMutableString *typeEncodingString = [NSMutableString stringWithFormat:@"@@:"];
+                NSArray* argsTypes = [typeEncoding valueForKey:@"argumentTypes"];
+                for (int i = 0; i < [argsTypes count]; i++) {
+                    [typeEncodingString appendString:argsTypes[i]];
+                }
+                
+                [moClassDescription addInstanceMethodWithSelector:NSSelectorFromString(key) typeEncoding:typeEncodingString block:MOGetBlockForJavaScriptFunctionWithType(object, typeEncoding)];
+            } else {
+                [moClassDescription addInstanceVariableWithName: key typeEncoding: [typeEncodings valueForKey:key] ?: @"@"];
+            }
+        }];
+        
+        [moClassDescription addInstanceVariableWithName: @"__mocha" typeEncoding: @"@"];
+        
+        nativeClass = [moClassDescription registerClass];
+        
+        [_registeredClasses addObject:className];
+    }
+    
+    id instance = [nativeClass new];
+    
+    id initFunction = [classDescription valueForKey:@"init"];
+    
+    if (initFunction && [initFunction isKindOfClass:[MOJavaScriptObject class]]) {
+        JSValueRef exception = NULL;
+        JSObjectRef value = [self boxedJSObjectForObject:instance];
+        JSValueProtect(_ctx, value);
+        
+        JSValueRef *jsArguments = malloc(0);
+        
+        JSObjectCallAsFunction(self.context, [initFunction JSObject], value, 0, jsArguments, &exception);
+        
+        if (jsArguments != NULL) {
+            free(jsArguments);
+        }
+        
+        JSValueUnprotect(_ctx, value);
+    }
+    
+    object_setIvar(
+      instance,
+      class_getInstanceVariable(nativeClass, [@"__mocha" UTF8String]),
+      self
+    );
+    
+    return instance;
+}
+
+- (void)deregisterNativeClasses {
+    [_registeredClasses enumerateObjectsUsingBlock:^(id className, NSUInteger idx, BOOL *stop) {
+        Class registeredClass = objc_lookUpClass([className UTF8String]);
+        if (registeredClass) {
+            // TODO: this crashes, probably because there are still some instances running. I need to find a way to clean them up
+//            objc_disposeClassPair(registeredClass);
+        }
+    }];
+
+    [_registeredClasses removeAllObjects];
 }
 
 @end

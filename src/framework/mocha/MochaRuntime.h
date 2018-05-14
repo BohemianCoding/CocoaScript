@@ -31,7 +31,7 @@
  */
 + (Mocha *)sharedRuntime;
 
-
+@property (nonatomic, copy) void (^expectionHandler)(JSContext* context, NSException *exception);
 
 /*!
  * @property delegate
@@ -362,4 +362,8 @@ MOCHA_EXTERN NSString * const MORuntimeException;
  * @abstract The name of exceptions raised within JavaScript code
  */
 MOCHA_EXTERN NSString * const MOJavaScriptException;
+
+@protocol MORegisteredNativeClass
+@property Mocha* __mocha;
+@end
 

@@ -15,9 +15,7 @@
 #import <ffi/ffi.h>
 #endif
 
-
 @class MOBridgeSupportFunction, MOFunctionArgument, MOJavaScriptObject;
-
 
 JSValueRef MOJSValueToType(JSContextRef ctx, JSObjectRef objectJS, JSType type, JSValueRef *exception);
 NSString * MOJSValueToString(JSContextRef ctx, JSValueRef value, JSValueRef *exception);
@@ -36,4 +34,6 @@ NSString * MOSelectorToPropertyName(SEL selector);
 
 NSString * MOPropertyNameToSetterName(NSString *propertyName);
 
+NSUInteger MOGetFunctionLength(MOJavaScriptObject *function);
 id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *argCount);
+id MOGetBlockForJavaScriptFunctionWithType(MOJavaScriptObject *function, NSDictionary *typeEncodings);

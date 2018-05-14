@@ -927,16 +927,20 @@ NSString * MOPropertyNameToSetterName(NSString *propertyName) {
 
 typedef id (^MOJavaScriptClosureBlock)(id obj, ...);
 
+NSUInteger MOGetFunctionLength(MOJavaScriptObject *function) {
+    JSObjectRef jsFunction = [function JSObject];
+    JSContextRef ctx = [function JSContext];
+    JSStringRef lengthString = JSStringCreateWithCFString(CFSTR("length"));
+    JSValueRef value = JSObjectGetProperty(ctx, jsFunction, lengthString, NULL);
+    JSStringRelease(lengthString);
+    
+    return (NSUInteger)JSValueToNumber(ctx, value, NULL);
+}
+
 id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *argCount) {
 
     if (argCount != NULL) {
-        JSObjectRef jsFunction = [function JSObject];
-        JSContextRef ctx = [function JSContext];
-        JSStringRef lengthString = JSStringCreateWithCFString(CFSTR("length"));
-        JSValueRef value = JSObjectGetProperty(ctx, jsFunction, lengthString, NULL);
-        JSStringRelease(lengthString);
-        
-        *argCount = (NSUInteger)JSValueToNumber(ctx, value, NULL);
+        *argCount = MOGetFunctionLength(function);
     }
     
     MOJavaScriptClosureBlock newBlock = (id)^(id obj, ...) {
@@ -970,6 +974,117 @@ id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *arg
         for (NSUInteger i=0; i<functionArgCount; i++) {
             arg = va_arg(args, id);
             jsArguments[i] = [runtime JSValueForObject:arg];
+        }
+        
+        va_end(args);
+        
+        JSValueRef jsReturnValue = JSObjectCallAsFunction(ctx, jsFunction, jsObject, functionArgCount, jsArguments, &exception);
+        id returnValue = [runtime objectForJSValue:jsReturnValue];
+        
+        if (jsArguments != NULL) {
+            free(jsArguments);
+        }
+        
+        if (exception != NULL) {
+            [runtime throwJSException:exception];
+            return nil;
+        }
+        
+        return (__bridge void*)returnValue;
+    };
+    return [newBlock copy];
+}
+
+/**
+ * typeEncodings is an NSDictionary
+ * {
+ *    returnType: NSString,
+ *    argumentTypes: [NSString]
+ * }
+ */
+id MOGetBlockForJavaScriptFunctionWithType(MOJavaScriptObject *function, NSDictionary *typeEncodings) {
+//    NSString* returnType = [typeEncodings objectForKey:@"returnType"];
+    NSArray* argumentTypes = [typeEncodings objectForKey:@"argumentTypes"];
+
+    MOJavaScriptClosureBlock newBlock = (id)^(id this, ...) {
+        Mocha *runtime = object_getIvar(this, class_getInstanceVariable([this class], [@"__mocha" UTF8String]));
+        NSLog(@"%@", runtime);
+        if (!runtime) {
+            @throw [NSException exceptionWithName:@"Bad argument" reason:@"Block should be called from an MORegisteredNativeClass" userInfo:nil];
+        }
+
+        // JavaScript functions
+        JSObjectRef jsFunction = [function JSObject];
+        JSContextRef ctx = [function JSContext];
+        
+        JSValueRef exception = NULL;
+        
+        // pop the current object from the args
+        va_list args;
+        va_start(args, this);
+        
+        // check if the current object can be serialized
+        JSValueRef jsValue = [runtime JSValueForObject:this];
+        JSObjectRef jsObject = JSValueToObject(ctx, jsValue, &exception);
+        if (jsObject == NULL) {
+            [runtime throwJSException:exception];
+            return nil;
+        }
+        
+        NSUInteger functionArgCount = [argumentTypes count];
+        
+        JSValueRef *jsArguments = (JSValueRef *)malloc(sizeof(JSValueRef) * (functionArgCount - 1));
+        
+        // Handle passed arguments
+        for (NSUInteger i=0; i<functionArgCount; i++) {
+            NSString* type = argumentTypes[i];
+            if ([type isEqualToString:@"i"]) {
+                int value = va_arg(args, int);
+                jsArguments[i] = JSValueMakeNumber(runtime.context, value);
+            } else if ([type isEqualToString:@"I"]) {
+                uint value = va_arg(args, uint);
+                jsArguments[i] = JSValueMakeNumber(runtime.context, value);
+            } else if ([type isEqualToString:@"q"]) {
+                NSInteger value = va_arg(args, NSInteger);
+                jsArguments[i] = JSValueMakeNumber(runtime.context, value);
+            } else if ([type isEqualToString:@"Q"]) {
+                NSUInteger value = va_arg(args, NSUInteger);
+                jsArguments[i] = JSValueMakeNumber(runtime.context, value);
+            } else if ([type isEqualToString:@"d"]) {
+                double value = va_arg(args, double);
+                jsArguments[i] = JSValueMakeNumber(runtime.context, value);
+            } else if ([type isEqualToString:@"c"]) {
+                char value = va_arg(args, int);
+                jsArguments[i] = JSValueMakeString(
+                                                   runtime.context,
+                                                   JSStringCreateWithUTF8CString(&value)
+                                                );
+            } else if ([type isEqualToString:@"B"]) {
+                bool value = va_arg(args, int) != 0;
+                jsArguments[i] = JSValueMakeBoolean(runtime.context, value);
+//            } else if ([type isEqualToString:@"{CGRect={CGPoint=dd}{CGSize=dd}}"]) {
+//                CGRect value = va_arg(args, CGRect);
+//                jsArguments[i] = [JSValue valueWithRect:value inContext:context];
+//                NSLog(@"arg #%ld %@", n, NSStringFromRect(value));
+//            } else if ([type isEqualToString:@"{CGPoint=dd}"]) {
+//                CGPoint value = va_arg(args, CGPoint);
+//                jsArguments[i] = [JSValue valueWithPoint:value inContext:context];
+//                NSLog(@"arg #%ld %@", n, NSStringFromPoint(value));
+//            } else if ([type isEqualToString:@"{CGSize=dd}"]) {
+//                CGSize value = va_arg(args, CGSize);
+//                jsArguments[i] = [JSValue valueWithSize:value inContext:context];
+//                NSLog(@"arg #%ld %@", n, NSStringFromSize(value));
+//            } else if ([type isEqualToString:@"{_NSRange=QQ}"]) {
+//                NSRange value = va_arg(args, NSRange);
+//                jsArguments[i] = [JSValue valueWithRange:value inContext:context];
+//                NSLog(@"arg #%ld %@", n, NSStringFromRange(value));
+            } else if ([type characterAtIndex:0] == '@') {
+                id value = va_arg(args, id);
+                jsArguments[i] = [runtime JSValueForObject:value];
+            } else {
+                NSLog(@"arg #%ld type %@", i, type);
+                jsArguments[i] = JSValueMakeNull(runtime.context);
+            }
         }
         
         va_end(args);

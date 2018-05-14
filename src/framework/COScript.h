@@ -17,17 +17,23 @@
 - (void)output:(NSString*)format args:(va_list)args;
 @end
 
+@protocol COErrorController
+- (void)source:(NSString*)script hadError:(NSString*)error onLineNumber:(NSInteger)lineNumber atSourceURL:(id)url;
+@end
+
+@protocol COPrintController
+- (void)print:(id)s;
+@end
+
 @interface COScript : NSObject {
-    
     Mocha *_mochaRuntime;
-    
     // used in COScript+Fiber
     NSMutableArray *_activeFibers;
     int _nextFiberId;
 }
 
-@property (weak) id printController;
-@property (weak) id errorController;
+@property (weak) id<COPrintController> printController;
+@property (weak) id<COErrorController> errorController;
 @property (retain) NSMutableDictionary *env;
 @property (assign) BOOL shouldPreprocess;
 @property (assign) BOOL shouldKeepAround;

@@ -24,15 +24,9 @@
     interval->_timer = t;
     
     return interval;
-    
-}
-
-- (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)cleanup {
-    
     [super cleanup];
     
     _jsfunc = nil;

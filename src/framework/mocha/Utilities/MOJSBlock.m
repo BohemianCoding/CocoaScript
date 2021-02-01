@@ -175,7 +175,7 @@ static id return_id(JSContextRef ctx, JSValueRef value) {
  
  */
 
-static void void_invoke(MOJSBlock* block, ...) {
+static void void_invoke_var(MOJSBlock* block, ...) {
     va_list args;
     va_start(args, block);
     NSMethodSignature* signature = block.signature;
@@ -184,13 +184,20 @@ static void void_invoke(MOJSBlock* block, ...) {
     va_end(args);
 }
 
+static void void_invoke(MOJSBlock* block, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) {
+    void_invoke_var(block, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
+}
+
 #define INVOKE_BLOCK_RETURNING(_type_) \
-static _type_ _type_ ## _invoke(MOJSBlock* block, ...) { \
+static _type_ _type_ ## _invoke_var(MOJSBlock* block, ...) { \
 va_list args; \
 va_start(args, block); \
 JSValueRef jsResult = jsInvoke(block.function, block.signature, args); \
 va_end(args); \
 return return_ ## _type_([block.function JSContext], jsResult); \
+} \
+static _type_ _type_ ## _invoke(MOJSBlock* block, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) { \
+return _type_ ## _invoke_var(block, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12); \
 }
 
 INVOKE_BLOCK_RETURNING(double);

@@ -937,6 +937,7 @@ NSString * MOPropertyNameToSetterName(NSString *propertyName) {
 #pragma mark Blocks
 
 typedef id (^MOJavaScriptClosureBlock)(id obj, ...);
+typedef id (^MOJavaScriptClosureWrapperBlock)(id obj, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12);
 
 NSUInteger MOGetFunctionLength(MOJavaScriptObject *function) {
     JSObjectRef jsFunction = [function JSObject];
@@ -1003,5 +1004,15 @@ id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *arg
         
         return (__bridge void*)returnValue;
     };
-    return [newBlock copy];
+    
+    // Because of the architectural differences between Intel and ARM, we're wrapping the variadic
+    // block above into one with a set number of parameters here.
+    //
+    // See also MSJSBlock.m and the void_invoke function for a longer explanation.
+    // See also https://github.com/sketch-hq/Sketch/issues/35324
+    MOJavaScriptClosureWrapperBlock wrapperBlock = (id)^(id obj, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) {
+        newBlock(obj, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
+    };
+
+    return [wrapperBlock copy];
 }

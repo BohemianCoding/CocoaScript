@@ -175,7 +175,10 @@ static id return_id(JSContextRef ctx, JSValueRef value) {
  
  */
 
-static void void_invoke(MOJSBlock* block, ...) {
+/// Original implementation of the `void_invoke` method which takes variable arguments.
+///
+/// @param block The MOJSBlock wrapper that has additional information.
+static void void_invoke_var(MOJSBlock* block, ...) {
     va_list args;
     va_start(args, block);
     NSMethodSignature* signature = block.signature;
@@ -184,13 +187,39 @@ static void void_invoke(MOJSBlock* block, ...) {
     va_end(args);
 }
 
+/// Wrapper around `void_invoke` with a set number of parameters instead of a variadic function.
+///
+/// Because the implementation of variadic functions is different on Intel and ARM CPUs (with the
+/// former using registers plus stack for the arguments and the latter placing them directly on the
+/// stack) paired with the inability of Clang to determine automatically that we are using a
+/// variadic function for this block, we use a wrapper that passes the arguments it receives over
+/// to the original variadic function.
+///
+/// **Note**: This is a workaround because finding a proper fix could potentially take a lot of
+/// time. A better fix would be convincing the compiler that we're using variadic functions and
+/// thus not to look for parameters in registers on ARM, but from our testing this is not achieved
+/// by changing the type of the invoke method, possibly because it is not considered as part of the
+/// Objective-C blocks ABI.
+///
+/// **See also**:
+/// * https://github.com/sketch-hq/Sketch/issues/35324
+///
+/// @param block The MOJSBlock wrapper that has additional information.
+/// @param argx The arguments passed into this function and on to the variadic function.
+static void void_invoke(MOJSBlock* block, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) {
+    void_invoke_var(block, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
+}
+
 #define INVOKE_BLOCK_RETURNING(_type_) \
-static _type_ _type_ ## _invoke(MOJSBlock* block, ...) { \
+static _type_ _type_ ## _invoke_var(MOJSBlock* block, ...) { \
 va_list args; \
 va_start(args, block); \
 JSValueRef jsResult = jsInvoke(block.function, block.signature, args); \
 va_end(args); \
 return return_ ## _type_([block.function JSContext], jsResult); \
+} \
+static _type_ _type_ ## _invoke(MOJSBlock* block, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) { \
+return _type_ ## _invoke_var(block, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12); \
 }
 
 INVOKE_BLOCK_RETURNING(double);

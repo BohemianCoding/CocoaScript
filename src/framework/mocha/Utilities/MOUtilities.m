@@ -980,7 +980,7 @@ id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *arg
             return nil;
         }
         
-        JSValueRef *jsArguments = (JSValueRef *)malloc(sizeof(JSValueRef) * (functionArgCount - 1));
+        JSValueRef *jsArguments = (JSValueRef *)malloc(sizeof(JSValueRef) * (functionArgCount));
         
         // Handle passed arguments
         for (NSUInteger i=0; i<functionArgCount; i++) {
@@ -1011,7 +1011,7 @@ id MOGetBlockForJavaScriptFunction(MOJavaScriptObject *function, NSUInteger *arg
     // See also MSJSBlock.m and the void_invoke function for a longer explanation.
     // See also https://github.com/sketch-hq/Sketch/issues/35324
     MOJavaScriptClosureWrapperBlock wrapperBlock = (id)^(id obj, void *arg1, void *arg2, void *arg3, void *arg4, void *arg5, void *arg6, void *arg7, void *arg8, void *arg9, void *arg10, void *arg11, void *arg12) {
-        newBlock(obj, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
+        return newBlock(obj, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12);
     };
 
     return [wrapperBlock copy];
